@@ -1,0 +1,7 @@
+{
+  // leading comment
+  "model": "glm/glm-4.6", // trailing comment
+  "provider": {
+    "glm": { "options": { "baseURL": "https://open.bigmodel.cn/api/anthropic" } }
+  }
+}

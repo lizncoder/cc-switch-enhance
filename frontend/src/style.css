@@ -1,0 +1,35 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: #16161c; /* matches the Wails window BackgroundColour */
+  overflow: hidden;
+  user-select: none;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Breathing border lives on <body> (fills the whole window) so the glow covers
+   the full window edge even in collapsed bar mode, where the .bar element is
+   narrower than the window (width: max-content). */
+body.working {
+  animation: breathe 2.2s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { box-shadow: inset 0 0 0 1px #1e3a28, inset 0 0 10px rgba(55,214,122,0.18); }
+  50%      { box-shadow: inset 0 0 0 1px #37d67a, inset 0 0 22px rgba(55,214,122,0.55); }
+}
+
+/* Quota warning: red pulse. Takes priority over the green working border — the
+   App.vue watch drops body.working when body.warn is set, so only red shows. */
+body.warn {
+  animation: breathe-warn 1.6s ease-in-out infinite;
+}
+@keyframes breathe-warn {
+  0%, 100% { box-shadow: inset 0 0 0 1px #5a1e1e, inset 0 0 12px rgba(245,80,80,0.25); }
+  50%      { box-shadow: inset 0 0 0 1px #f55050, inset 0 0 24px rgba(245,80,80,0.65); }
+}

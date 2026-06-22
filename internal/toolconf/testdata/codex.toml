@@ -1,0 +1,9 @@
+# internal/toolconf/testdata/codex.toml
+model_provider = "glm"
+model = "glm-4.6"
+
+[model_providers.glm]
+name = "GLM"
+base_url = "https://open.bigmodel.cn/api/anthropic"
+env_key = "CODEX_GLM_KEY"
+wire_api = "responses"
