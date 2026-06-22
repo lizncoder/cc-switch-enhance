@@ -6,6 +6,10 @@ export function CCSwitchInstalled() {
   return window['go']['main']['App']['CCSwitchInstalled']();
 }
 
+export function GetAutoStart() {
+  return window['go']['main']['App']['GetAutoStart']();
+}
+
 export function GetSnapshot() {
   return window['go']['main']['App']['GetSnapshot']();
 }
@@ -28,6 +32,10 @@ export function SetAlwaysOnTop(arg1) {
 
 export function SetApp(arg1) {
   return window['go']['main']['App']['SetApp'](arg1);
+}
+
+export function SetAutoStart(arg1) {
+  return window['go']['main']['App']['SetAutoStart'](arg1);
 }
 
 export function SetBarWidth(arg1) {

@@ -4,6 +4,8 @@ import {snapshot} from '../models';
 
 export function CCSwitchInstalled():Promise<boolean>;
 
+export function GetAutoStart():Promise<boolean>;
+
 export function GetSnapshot():Promise<snapshot.Snapshot>;
 
 export function ListApps():Promise<Array<string>>;
@@ -15,6 +17,8 @@ export function Quit():Promise<void>;
 export function SetAlwaysOnTop(arg1:boolean):Promise<void>;
 
 export function SetApp(arg1:string):Promise<void>;
+
+export function SetAutoStart(arg1:boolean):Promise<void>;
 
 export function SetBarWidth(arg1:number):Promise<void>;
 

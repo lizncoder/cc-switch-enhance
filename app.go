@@ -20,6 +20,7 @@ import (
 
 	"git.sr.ht/~jackmordaunt/go-toast/v2"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.org/x/sys/windows/registry"
 
 	"cc-enhance/internal/ccswitchdb"
 	"cc-enhance/internal/claudecode"
@@ -1020,6 +1021,16 @@ func (a *App) ToggleShow() {
 
 func (a *App) SetAlwaysOnTop(on bool) { runtime.WindowSetAlwaysOnTop(a.ctx, on) }
 
+// SetAutoStart implements tray.Controller and is also bound to the frontend.
+// It enables or disables login-time launch via Windows registry.
+func (a *App) SetAutoStart(on bool) {
+	if err := a.setAutoStartRegistry(on); err != nil {
+		log.Printf("set auto-start: %v", err)
+	}
+	// Update tray menu state after the change.
+	tray.SetAutoStartState(on)
+}
+
 // OpenCCSwitch launches (or focuses, via Tauri single-instance) the cc-switch
 // app so the user can switch providers without leaving the overlay workflow.
 // Best-effort: logs a notice if the executable isn't found.
@@ -1045,6 +1056,50 @@ func (a *App) CCSwitchInstalled() bool {
 		}
 	}
 	return false
+}
+
+// GetAutoStart reports whether cc-enhance is registered to launch at user login
+// (HKCU\Software\Microsoft\Windows\CurrentVersion\Run).
+func (a *App) GetAutoStart() bool {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.READ)
+	if err != nil {
+		return false
+	}
+	defer k.Close()
+	val, _, err := k.GetStringValue("cc-enhance")
+	if err != nil || val == "" {
+		return false
+	}
+	// Also verify the value points to our own executable (not a stale entry from
+	// a different install path).
+	myExe, err := os.Executable()
+	if err != nil {
+		return true // registry key present, assume true on error
+	}
+	return strings.EqualFold(val, myExe)
+}
+
+// setAutoStartRegistry enables or disables login-time launch via Windows registry.
+func (a *App) setAutoStartRegistry(on bool) error {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.SET_VALUE|registry.QUERY_VALUE)
+	if err != nil {
+		return fmt.Errorf("open registry Run key: %w", err)
+	}
+	defer k.Close()
+	if on {
+		exe, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("get executable path: %w", err)
+		}
+		if err := k.SetStringValue("cc-enhance", exe); err != nil {
+			return fmt.Errorf("set registry value: %w", err)
+		}
+	} else {
+		if err := k.DeleteValue("cc-enhance"); err != nil && err != registry.ErrNotExist {
+			return fmt.Errorf("delete registry value: %w", err)
+		}
+	}
+	return nil
 }
 
 // ccSwitchExeCandidates returns likely cc-switch.exe install paths to probe, in

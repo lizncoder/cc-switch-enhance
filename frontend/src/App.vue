@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { EventsOn, EventsOff, WindowSetSize } from '../wailsjs/runtime/runtime';
-import { GetSnapshot, ListApps, OpenCCSwitch, CCSwitchInstalled, SetApp, SetCollapsed, SetBarWidth, SetCardHeight } from '../wailsjs/go/main/App';
+import { GetSnapshot, ListApps, OpenCCSwitch, CCSwitchInstalled, SetApp, SetCollapsed, SetBarWidth, SetCardHeight, GetAutoStart, SetAutoStart } from '../wailsjs/go/main/App';
 import ccSwitchIcon from './assets/images/cc-switch.png';
 import type { Snapshot, SeriesPoint } from './types';
 import Chart from './components/Chart.vue';
@@ -12,6 +12,8 @@ const snap = ref<Snapshot | null>(null);
 const apps = ref<string[]>([]);
 // Whether cc-switch is installed; the launcher icon shows only when true.
 const ccSwitchInstalled = ref(false);
+// Whether cc-enhance starts automatically at user login.
+const autoStart = ref(false);
 
 const dotClass = computed(() => {
   const s = snap.value;
@@ -176,6 +178,7 @@ async function loadInitial() {
     snap.value = s;
     apps.value = (await ListApps()) as unknown as string[];
     ccSwitchInstalled.value = await CCSwitchInstalled();
+    autoStart.value = await GetAutoStart();
     fitCard(s);
   } catch (e) { console.error('initial load failed', e); }
 }
@@ -191,6 +194,10 @@ async function collapse(on: boolean) {
 // Start Menu shortcuts and logs if cc-switch isn't installed.
 async function openCCSwitch() {
   try { await OpenCCSwitch(); } catch (e) { console.error('open cc-switch failed', e); }
+}
+async function toggleAutoStart() {
+  const next = !autoStart.value;
+  try { await SetAutoStart(next); autoStart.value = next; } catch (e) { console.error('set auto-start failed', e); }
 }
 
 let off = false;
@@ -297,6 +304,12 @@ onBeforeUnmount(() => { if (!off) { EventsOff('snapshot'); off = true; } stopMod
     <div class="stats">
       <span v-if="isGLM" :class="{ red: warn }"><i>5h</i>{{ stat5h }}</span>
       <span v-if="isGLM" :class="{ red: warn }"><i>7天</i>{{ stat7d }}</span>
+      <label class="autostart-switch" title="开机自启" @click="toggleAutoStart">
+        <span class="switch-track" :class="{ on: autoStart }">
+          <span class="switch-thumb"></span>
+        </span>
+        <span class="switch-label">自启</span>
+      </label>
       <span class="refresh">刷新 {{ refreshTime }}</span>
     </div>
 
@@ -384,6 +397,14 @@ onBeforeUnmount(() => { if (!off) { EventsOff('snapshot'); off = true; } stopMod
 .stats span { font-weight: 600; }
 .stats i { font-style: normal; font-weight: 400; color: #6c6c7a; margin-right: 4px; }
 .stats .refresh { margin-left: auto; color: #6c6c7a; font-weight: 400; }
+
+/* Auto-start toggle switch */
+.autostart-switch { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+.switch-track { width: 24px; height: 12px; border-radius: 6px; background: #333; position: relative; transition: background .15s; }
+.switch-track.on { background: #37d67a; }
+.switch-thumb { width: 8px; height: 8px; border-radius: 50%; background: #b8b8c4; position: absolute; top: 2px; left: 2px; transition: transform .15s, background .15s; }
+.switch-track.on .switch-thumb { transform: translateX(12px); background: #fff; }
+.switch-label { font-weight: 400; color: #6c6c7a; font-size: 10px; }
 
 .plan { background: #1c1c24; border-radius: 8px; padding: 6px 10px 7px; margin-top: 7px; }
 .plan .block-head { margin-bottom: 4px; }

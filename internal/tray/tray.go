@@ -12,10 +12,15 @@ import (
 // "退出" handler and from app shutdown, and systray.Quit panics on a second call.
 var quitOnce sync.Once
 
+// autoStartItem is the tray's "开机自启" item, stored so SetAutoStartState can
+// toggle the checkmark after the backend changes the registry.
+var autoStartItem *systray.MenuItem
+
 // Controller is what the tray drives. The App implements it.
 type Controller interface {
 	ToggleShow()
 	SetAlwaysOnTop(on bool)
+	SetAutoStart(on bool)
 	OpenCCSwitch()
 	Quit()
 }
@@ -30,10 +35,12 @@ func Run(c Controller, icon []byte) {
 
 		mToggle := systray.AddMenuItem("显示 / 隐藏", "显示或隐藏浮窗")
 		mTop := systray.AddMenuItemCheckbox("窗口置顶", "切换始终置顶", true)
+		mAutoStart := systray.AddMenuItemCheckbox("开机自启", "开机自动启动 cc-enhance", false)
 		mCCS := systray.AddMenuItem("打开 cc-switch", "打开 cc-switch 切换 provider")
 		systray.AddSeparator()
 		mQuit := systray.AddMenuItem("退出", "退出 cc-enhance")
 
+		autoStartItem = mAutoStart
 		go func() {
 			for {
 				select {
@@ -47,6 +54,14 @@ func Run(c Controller, icon []byte) {
 						mTop.Check()
 						c.SetAlwaysOnTop(true)
 					}
+				case <-mAutoStart.ClickedCh:
+					newState := !mAutoStart.Checked()
+					c.SetAutoStart(newState)
+					if newState {
+						mAutoStart.Check()
+					} else {
+						mAutoStart.Uncheck()
+					}
 				case <-mCCS.ClickedCh:
 					c.OpenCCSwitch()
 				case <-mQuit.ClickedCh:
@@ -57,6 +72,19 @@ func Run(c Controller, icon []byte) {
 			}
 		}()
 	}, nil)
+}
+
+// SetAutoStartState updates the tray menu checkbox without triggering the
+// handler. Called by the App backend after SetAutoStart writes the registry.
+func SetAutoStartState(on bool) {
+	if autoStartItem == nil {
+		return
+	}
+	if on {
+		autoStartItem.Check()
+	} else {
+		autoStartItem.Uncheck()
+	}
 }
 
 // Quit terminates the tray (call on app shutdown if needed).
