@@ -779,7 +779,7 @@ func (a *App) SetCardHeight(h int) {
 		h = 640
 	}
 	a.winH = h
-	runtime.WindowSetSize(a.ctx, 320, h)
+	runtime.WindowSetSize(a.ctx, overlayWidth, h)
 }
 
 // SetUserHeight persists a manually-chosen card height and applies it. Once
@@ -793,10 +793,14 @@ func (a *App) SetUserHeight(h int) error {
 	_ = a.cfg.Save(a.paths.OverlayConfig, a.paths.OverlayDir)
 	if h != 0 && a.ctx != nil && !a.cfg.Collapsed {
 		a.winH = h
-		runtime.WindowSetSize(a.ctx, 320, h)
+		runtime.WindowSetSize(a.ctx, overlayWidth, h)
 	}
 	return nil
 }
+
+// overlayWidth is the single window width shared by the collapsed bar and the
+// expanded card, so the overlay never changes width when toggling between them.
+const overlayWidth = 320
 
 // applyCollapsed resizes the window to the bar or card dimensions. The overlay
 // is always tray-only (no taskbar slot) — see setTaskbarVisible in domReady.
@@ -805,9 +809,10 @@ func (a *App) applyCollapsed() {
 		return
 	}
 	if a.cfg.Collapsed {
-		// Collapsed: just set height to 36. Width follows whatever the window
-		// currently is — Wails WindowSetSize is unreliable for frameless windows.
-		runtime.WindowSetSize(a.ctx, a.winW, 36)
+		// Collapsed bar: fixed width matching the expanded card (overlayWidth),
+		// so the overlay keeps the same width in both states.
+		runtime.WindowSetSize(a.ctx, overlayWidth, 36)
+		a.winW = overlayWidth
 	} else {
 		// Expand: set width first, then a default height. The frontend's fitCard
 		// will measure the real content height and call SetCardHeight to adjust.
@@ -816,8 +821,8 @@ func (a *App) applyCollapsed() {
 		if a.cfg.UserCardHeight >= 200 && a.cfg.UserCardHeight <= 640 {
 			h = a.cfg.UserCardHeight
 		}
-		runtime.WindowSetSize(a.ctx, 320, h)
-		a.winW, a.winH = 320, h
+		runtime.WindowSetSize(a.ctx, overlayWidth, h)
+		a.winW, a.winH = overlayWidth, h
 	}
 	// Overlay is tray-only regardless of state (see domReady).
 	setTaskbarVisible(false)

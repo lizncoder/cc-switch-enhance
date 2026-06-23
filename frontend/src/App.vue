@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { EventsOn, EventsOff, WindowSetSize } from '../wailsjs/runtime/runtime';
-import { GetSnapshot, ListApps, OpenCCSwitch, CCSwitchInstalled, SetApp, SetCollapsed, SetBarWidth, SetCardHeight, GetAutoStart, SetAutoStart } from '../wailsjs/go/main/App';
+import { GetSnapshot, ListApps, OpenCCSwitch, CCSwitchInstalled, SetApp, SetCollapsed, SetBarWidth, SetCardHeight } from '../wailsjs/go/main/App';
 import ccSwitchIcon from './assets/images/cc-switch.png';
 import type { Snapshot, SeriesPoint } from './types';
 import Chart from './components/Chart.vue';
@@ -12,8 +12,6 @@ const snap = ref<Snapshot | null>(null);
 const apps = ref<string[]>([]);
 // Whether cc-switch is installed; the launcher icon shows only when true.
 const ccSwitchInstalled = ref(false);
-// Whether cc-enhance starts automatically at user login.
-const autoStart = ref(false);
 
 const dotClass = computed(() => {
   const s = snap.value;
@@ -140,20 +138,15 @@ watch(barItems, (arr) => {
 }, { immediate: true });
 function fitBar() {
   nextTick(() => {
-    // Measure content width via max-content
-    const el = barRef.value;
-    if (!el) return;
-    const prev = el.style.width;
-    el.style.width = 'max-content';
-    const measured = Math.ceil(el.getBoundingClientRect().width);
-    el.style.width = prev;
-    const w = Math.min(Math.max(measured + 6, 280), 760);
-    // Re-assert the size on every call. Go-side WindowSetSize is unreliable for
-    // this frameless always-on-top window, so this JS call is the authoritative
-    // sizer — without it the height drifts back to the expanded value after a
-    // collapse. (Frequency is already bounded by the snapshot diff guard, which
-    // skips this entirely on idle ticks.)
-    WindowSetSize(w, 36);
+    if (!barRef.value) return;
+    // Re-assert the fixed bar size on every call. Go-side WindowSetSize is
+    // unreliable for this frameless always-on-top window, so this JS call is the
+    // authoritative sizer — without it the height drifts back to the expanded
+    // value after a collapse. Width is fixed at 320 to match the expanded card
+    // (overlayWidth in app.go): both states share one width, so the overlay
+    // never changes width on collapse/expand. (Frequency is bounded by the
+    // snapshot diff guard, which skips this on idle ticks.)
+    WindowSetSize(320, 36);
   });
 }
 // Re-fit when the bar collapses or the model name / cycled metric changes.
@@ -178,7 +171,6 @@ async function loadInitial() {
     snap.value = s;
     apps.value = (await ListApps()) as unknown as string[];
     ccSwitchInstalled.value = await CCSwitchInstalled();
-    autoStart.value = await GetAutoStart();
     fitCard(s);
   } catch (e) { console.error('initial load failed', e); }
 }
@@ -195,10 +187,6 @@ async function collapse(on: boolean) {
 async function openCCSwitch() {
   try { await OpenCCSwitch(); } catch (e) { console.error('open cc-switch failed', e); }
 }
-async function toggleAutoStart() {
-  const next = !autoStart.value;
-  try { await SetAutoStart(next); autoStart.value = next; } catch (e) { console.error('set auto-start failed', e); }
-}
 
 let off = false;
 function fitCard(snapVal: Snapshot | null) {
@@ -206,7 +194,17 @@ function fitCard(snapVal: Snapshot | null) {
   nextTick(() => {
     const el = cardRef.value;
     if (!el) return;
+    // .card is height:100% + overflow:hidden, so once the window fits the
+    // content its scrollHeight reads back the *window* height (== clientHeight),
+    // not the content height. Measuring that and calling SetCardHeight(h+4)
+    // feeds back: next tick scrollHeight is h+4, so the window crept +4px every
+    // tick — gradually taller forever, until the 640 clamp. Relax height to auto
+    // for the read so scrollHeight reflects the true content height (same trick
+    // fitBar uses for width; restore before yielding so nothing paints mid-measure).
+    const prev = el.style.height;
+    el.style.height = 'auto';
     const h = Math.ceil(el.scrollHeight + 4);
+    el.style.height = prev;
     if (h !== lastCardH) { lastCardH = h; SetCardHeight(h); }
   });
 }
@@ -304,12 +302,6 @@ onBeforeUnmount(() => { if (!off) { EventsOff('snapshot'); off = true; } stopMod
     <div class="stats">
       <span v-if="isGLM" :class="{ red: warn }"><i>5h</i>{{ stat5h }}</span>
       <span v-if="isGLM" :class="{ red: warn }"><i>7天</i>{{ stat7d }}</span>
-      <label class="autostart-switch" title="开机自启" @click="toggleAutoStart">
-        <span class="switch-track" :class="{ on: autoStart }">
-          <span class="switch-thumb"></span>
-        </span>
-        <span class="switch-label">自启</span>
-      </label>
       <span class="refresh">刷新 {{ refreshTime }}</span>
     </div>
 
@@ -398,14 +390,6 @@ onBeforeUnmount(() => { if (!off) { EventsOff('snapshot'); off = true; } stopMod
 .stats i { font-style: normal; font-weight: 400; color: #6c6c7a; margin-right: 4px; }
 .stats .refresh { margin-left: auto; color: #6c6c7a; font-weight: 400; }
 
-/* Auto-start toggle switch */
-.autostart-switch { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
-.switch-track { width: 24px; height: 12px; border-radius: 6px; background: #333; position: relative; transition: background .15s; }
-.switch-track.on { background: #37d67a; }
-.switch-thumb { width: 8px; height: 8px; border-radius: 50%; background: #b8b8c4; position: absolute; top: 2px; left: 2px; transition: transform .15s, background .15s; }
-.switch-track.on .switch-thumb { transform: translateX(12px); background: #fff; }
-.switch-label { font-weight: 400; color: #6c6c7a; font-size: 10px; }
-
 .plan { background: #1c1c24; border-radius: 8px; padding: 6px 10px 7px; margin-top: 7px; }
 .plan .block-head { margin-bottom: 4px; }
 .plan-row { display: flex; align-items: center; gap: 7px; padding: 2px 0; font-size: 11px; }
@@ -424,13 +408,13 @@ onBeforeUnmount(() => { if (!off) { EventsOff('snapshot'); off = true; } stopMod
 .err-chip { font-size: 10px; color: #ffb088; background: #2a2018; padding: 2px 6px; border-radius: 4px; }
 .loading { display: flex; align-items: center; justify-content: center; color: #888; }
 
-.bar { width: 100%; max-width: 760px; height: 100%; box-sizing: border-box; padding: 0 6px; display: flex; align-items: center; gap: 5px; color: #e6e6ea; font-size: 10px; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; overflow-x: auto; overflow-y: hidden; cursor: default; }
+.bar { width: 100%; max-width: 760px; height: 100%; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 5px; color: #e6e6ea; font-size: 10px; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; overflow-x: auto; overflow-y: hidden; cursor: default; }
 .bar .b-model { font-weight: 600; color: #c8d0ff; }
 .bar .b-cycle { flex: 1; text-align: right; padding-right: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; color: #e6e6ea; animation: bar-slide 0.4s ease; }
 @keyframes bar-slide {
   0%   { opacity: 0; transform: translateY(8px); }
   100% { opacity: 1; transform: translateY(0); }
 }
-.bar .expand { margin-left: auto; border: none; background: #2a2a34; color: #b8b8c4; border-radius: 4px; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto; transition: color .12s, background .12s; }
+.bar .expand { margin-left: auto; border: none; background: #2a2a34; color: #b8b8c4; border-radius: 4px; width: 22px; height: 20px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: 0 0 auto; transition: color .12s, background .12s; }
 .bar .expand:hover { color: #e6e6ea; background: #33333f; }
 </style>

@@ -20,6 +20,7 @@ var autoStartItem *systray.MenuItem
 type Controller interface {
 	ToggleShow()
 	SetAlwaysOnTop(on bool)
+	GetAutoStart() bool
 	SetAutoStart(on bool)
 	OpenCCSwitch()
 	Quit()
@@ -36,6 +37,10 @@ func Run(c Controller, icon []byte) {
 		mToggle := systray.AddMenuItem("显示 / 隐藏", "显示或隐藏浮窗")
 		mTop := systray.AddMenuItemCheckbox("窗口置顶", "切换始终置顶", true)
 		mAutoStart := systray.AddMenuItemCheckbox("开机自启", "开机自动启动 cc-enhance", false)
+		// Reflect the real registry state so the checkbox matches reality on launch.
+		if c.GetAutoStart() {
+			mAutoStart.Check()
+		}
 		mCCS := systray.AddMenuItem("打开 cc-switch", "打开 cc-switch 切换 provider")
 		systray.AddSeparator()
 		mQuit := systray.AddMenuItem("退出", "退出 cc-enhance")
